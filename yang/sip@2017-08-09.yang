@@ -23,7 +23,13 @@ module sip {
 		description
 		 "Configuration for SIP.";
 
-		list sip-account {
+		leaf enabled {
+			 description "Enable VOIP";
+			type boolean;
+			default "true";
+		}
+
+	list sip-account {
 			description
 			 "Sip account.";
 
@@ -76,6 +82,7 @@ module sip {
 				leaf registrar_port {
 					 description "SIP server registrar port";
 					type uint32;
+					default '5060';
 				}
 			}
 			container outbound_proxy {
@@ -86,70 +93,9 @@ module sip {
 				leaf port {
 					 description "SIP outbound proxy port";
 					type uint32;
+					default '5060';
 				}
 			}
 		}
-		list sip-user {
-			description
-			 "Sip user account.";
-
-			key sip_user;
-
-			leaf enabled {
-				 description "Enable this user account";
-				type boolean;
-				default "true";
-			}
-			leaf sip_user {
-				 description "Name of the SIP user account";
-				type string;
-			}
-			leaf extension {
-				 description "SIP doamin name";
-				type uint32;
-				mandatory true;
-			}
-			leaf username {
-				 description "username";
-				type string;
-				mandatory true;
-			}
-			leaf password {
-				 description "password";
-				type string;
-				mandatory true;
-			}
-
-		}
 	}
-
-    rpc start {
-        description
-            "Start SIP deamon.";
-    }
-
-    rpc stop {
-        description
-            "Stop SIP deamon.";
-    }
-
-    rpc restart {
-        description
-            "Restart SIP deamon.";
-    }
-
-    rpc reload {
-        description
-            "Reload SIP configuration files (or restart if that fails).";
-    }
-
-    rpc disable {
-        description
-            "Disable SIP deamon autostart.";
-    }
-
-    rpc enable {
-        description
-            "Enable SIP deamon autostart.";
-    }
 }

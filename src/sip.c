@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include <uci.h>
 #include <sys/stat.h>
-#include <libubox/list.h>
 
 #include <sysrepo.h>
 #include <sysrepo/plugins.h>
@@ -14,126 +13,32 @@
 
 /* name of the uci config file. */
 //static const char *config_file = "voice_client";
-static const char *yang_model = "ietf-interfaces";
-
-static int rpc_start(const char *xpath, const sr_val_t *input, const size_t input_cnt,
-              sr_val_t **output, size_t *output_cnt, void *private_ctx)
-{
-    pid_t pid=fork();
-    if (pid==0) {
-        execl("/etc/init.d/asterisk", "asterisk", "start", (char *) NULL);
-        exit(127);
-    } else {
-        waitpid(pid, 0, 0);
-    }
-
-    return SR_ERR_OK;
-}
-
-static int rpc_stop(const char *xpath, const sr_val_t *input, const size_t input_cnt,
-                    sr_val_t **output, size_t *output_cnt, void *private_ctx)
-{
-    pid_t pid=fork();
-    if (pid==0) {
-        execl("/etc/init.d/asterisk", "asterisk", "stop", (char *) NULL);
-        exit(127);
-    } else {
-        waitpid(pid, 0, 0);
-    }
-
-    return SR_ERR_OK;
-}
-
-static int rpc_restart(const char *xpath, const sr_val_t *input, const size_t input_cnt,
-                       sr_val_t **output, size_t *output_cnt, void *private_ctx)
-{
-    pid_t pid=fork();
-    if (pid==0) {
-        execl("/etc/init.d/asterisk", "asterisk", "restart", (char *) NULL);
-        exit(127);
-    } else {
-        waitpid(pid, 0, 0);
-    }
-
-    return SR_ERR_OK;
-}
-
-static int rpc_reload(const char *xpath, const sr_val_t *input, const size_t input_cnt,
-                      sr_val_t **output, size_t *output_cnt, void *private_ctx)
-{
-    pid_t pid=fork();
-    if (pid==0) {
-        execl("/etc/init.d/asterisk", "asterisk", "reload", (char *) NULL);
-        exit(127);
-    } else {
-        waitpid(pid, 0, 0);
-    }
-
-    return SR_ERR_OK;
-}
-
-static int rpc_disable(const char *xpath, const sr_val_t *input, const size_t input_cnt,
-                       sr_val_t **output, size_t *output_cnt, void *private_ctx)
-{
-    pid_t pid=fork();
-    if (pid==0) {
-        execl("/etc/init.d/asterisk", "asterisk", "disable", (char *) NULL);
-        exit(127);
-    } else {
-        waitpid(pid, 0, 0);
-    }
-
-    return SR_ERR_OK;
-}
-
-static int rpc_enable(const char *xpath, const sr_val_t *input, const size_t input_cnt,
-                      sr_val_t **output, size_t *output_cnt, void *private_ctx)
-{
-    pid_t pid = fork();
-    if (pid == 0) {
-        execl("/etc/init.d/asterisk", "asterisk", "enable", (char *) NULL);
-        exit(127);
-    } else {
-        waitpid(pid, 0, 0);
-    }
-
-    return SR_ERR_OK;
-}
-
-//static int
-//module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx) {
-//	int rc = SR_ERR_OK;
-//	ctx_t *ctx = private_ctx;
-//	INF("%s configuration has changed.", yang_model);
-//
-//	ctx->sess = session;
-//
-//	if (SR_EV_APPLY == event) {
-//		/* copy running datastore to startup */
-//
-//		rc = sr_copy_config(ctx->startup_sess, module_name, SR_DS_RUNNING, SR_DS_STARTUP);
-//		if (SR_ERR_OK != rc) {
-//			WRN_MSG("Failed to copy running datastore to startup");
-//			/* TODO handle this error */
-//			return rc;
-//		}
-//		return SR_ERR_OK;
-//	}
-//
-//	//rc = parse_config(session, module_name, ctx, event);
-//	CHECK_RET(rc, error, "failed to apply sysrepo changes to snabb: %s", sr_strerror(rc));
-//
-//error:
-//	return rc;
-//}
+static const char *yang_model = "sip";
 
 static int
-module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx)
-{
-    int rc = SR_ERR_OK;
-    ctx_t *ctx = private_ctx;
+module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx) {
+	int rc = SR_ERR_OK;
+	ctx_t *ctx = private_ctx;
+	INF("%s configuration has changed.", yang_model);
 
-    return rc;
+	ctx->sess = session;
+
+	if (SR_EV_APPLY == event) {
+		/* copy running datastore to startup */
+
+		rc = sr_copy_config(ctx->startup_sess, module_name, SR_DS_RUNNING, SR_DS_STARTUP);
+		if (SR_ERR_OK != rc) {
+			WRN_MSG("Failed to copy running datastore to startup");
+			/* TODO handle this error */
+			return rc;
+		}
+		return SR_ERR_OK;
+	}
+
+	CHECK_RET(rc, error, "failed to apply sysrepo changes to snabb: %s", sr_strerror(rc));
+
+error:
+	return rc;
 }
 
 int
@@ -151,39 +56,22 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 
     /* Allocate UCI context for uci files. */
     ctx->uctx = uci_alloc_context();
-    if (!ctx->uctx) {
-        fprintf(stderr, "Can't allocate uci\n");
-        goto error;
+    if (NULL == ctx->uctx) {
+		rc = SR_ERR_NOMEM;
     }
-INF_MSG("TEST");
-    rc = sr_module_change_subscribe(session, yang_model, module_change_cb, *private_ctx,
-                                    0, SR_SUBSCR_DEFAULT, &subscription);
+    CHECK_RET(rc, error, "Can't allocate uci context: %s", sr_strerror(rc));
+
+	rc = sr_module_change_subscribe(ctx->sess, yang_model, module_change_cb, *private_ctx,
+                                    0, SR_SUBSCR_DEFAULT, &ctx->sub);
     CHECK_RET(rc, error, "initialization error: %s", sr_strerror(rc));
-INF_MSG("TEST");
 
-	/* subscribe for handling RPC */
-/*
-    rc = sr_rpc_subscribe(session, "/sip:start", rpc_start, (void *)session, SR_SUBSCR_DEFAULT, &ctx->sub);
-    CHECK_RET(rc, error, "rpc start initialization error: %s", sr_strerror(rc));
-    rc = sr_rpc_subscribe(session, "/sip:stop", rpc_stop, (void *)session, SR_SUBSCR_DEFAULT, &subscription);
-    CHECK_RET(rc, error, "rpc stop initialization error: %s", sr_strerror(rc));
-    rc = sr_rpc_subscribe(session, "/sip:restart", rpc_restart, (void *)session, SR_SUBSCR_DEFAULT, &subscription);
-    CHECK_RET(rc, error, "rpc restart initialization error: %s", sr_strerror(rc));
-    rc = sr_rpc_subscribe(session, "/sip:reload", rpc_reload, (void *)session, SR_SUBSCR_DEFAULT, &subscription);
-    CHECK_RET(rc, error, "rpc reload initialization error: %s", sr_strerror(rc));
-    rc = sr_rpc_subscribe(session, "/sip:disable", rpc_disable, (void *)session, SR_SUBSCR_DEFAULT, &subscription);
-    CHECK_RET(rc, error, "rpc disable initialization error: %s", sr_strerror(rc));
-    rc = sr_rpc_subscribe(session, "/sip:enable", rpc_enable, (void *)session, SR_SUBSCR_DEFAULT, &subscription);
-    CHECK_RET(rc, error, "rpc enable initialization error: %s", sr_strerror(rc));
-
-*/
-    SRP_LOG_DBG_MSG("Plugin initialized successfully");
+    INF_MSG("Plugin initialized successfully");
 
     return SR_ERR_OK;
 
   error:
-    SRP_LOG_ERR("Plugin initialization failed: %s", sr_strerror(rc));
-    sr_unsubscribe(session, subscription);
+    ERR("Plugin initialization failed: %s", sr_strerror(rc));
+    sr_unsubscribe(ctx->sess, ctx->sub);
     free(ctx);
     return rc;
 }
