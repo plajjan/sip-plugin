@@ -24,7 +24,7 @@ static sr_uci_link table_sr_uci[] = {
 	{"voice_client.%s.name", "/sip:sip-config/sip-account[account='%s']/account_name"},
 	{"voice_client.%s.domain", "/sip:sip-config/sip-account[account='%s']/domain"},
 	{"voice_client.%s.user", "/sip:sip-config/sip-account[account='%s']/username"},
-	{"voice_client.%s.pass", "/sip:sip-config/sip-account[account='%s']/password"},
+	{"voice_client.%s.secret", "/sip:sip-config/sip-account[account='%s']/password"},
 	{"voice_client.%s.authuser", "/sip:sip-config/sip-account[account='%s']/authentication_name"},
 	{"voice_client.%s.host", "/sip:sip-config/sip-account[account='%s']/host"},
 	{"voice_client.%s.port", "/sip:sip-config/sip-account[account='%s']/port"},
@@ -326,7 +326,7 @@ int sync_datastores(ctx_t *ctx)
 	size_t value_cnt = 0;
 
 	/* set a non default xpath for checking if datastore is empty */
-	snprintf(xpath, XPATH_MAX_LEN, "/%s:*", ctx->yang_model);
+	snprintf(xpath, XPATH_MAX_LEN, "/%s:*//*", ctx->yang_model);
 	/* check if no items are in the datastore
 	 * if yes, srget_items will return error code "no items"
 	 */
@@ -339,9 +339,9 @@ int sync_datastores(ctx_t *ctx)
 		}
 	}
 
-	// value_cnt = 0;
+	//INF("VALUE count is %d", value_cnt);
 
-	if (value_cnt == 0) {
+	if (value_cnt <= 1) {
 		/* parse uci config */
 		rc = init_sysrepo_data(ctx);
 		INF_MSG("copy uci data to sysrepo");

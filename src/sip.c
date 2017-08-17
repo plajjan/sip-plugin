@@ -40,6 +40,14 @@ static int parse_change(sr_session_ctx_t *session, const char *module_name, ctx_
 		CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 	}
 
+	pid_t pid=fork();
+	if (pid==0) {
+		execl("/etc/init.d/voice_client", "voice_client", "restart", (char *) NULL);
+		exit(127);
+	} else {
+		waitpid(pid, 0, 0);
+	}
+
 error:
 	if (NULL != it) {
 		sr_free_change_iter(it);
