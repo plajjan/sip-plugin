@@ -85,12 +85,20 @@ error:
 static int state_data_cb(const char *xpath, sr_val_t **values, size_t *values_cnt, void *private_ctx)
 {
     int rc = SR_ERR_OK;
+	ctx_t *ctx = private_ctx;
 
-	INF_MSG("State data called");
+	rc = fill_state_data(ctx, (char *) xpath, values, values_cnt);
+	CHECK_RET(rc, error, "failed to load state data: %s", sr_strerror(rc));
 
+	/*
+	for (int i = 0; i < *values_cnt; i++) {
+		sr_print_val(&(*values)[i]);
+	}
+	*/
+
+error:
     return rc;
 }
-
 
 int sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 {

@@ -6,6 +6,11 @@
 #include <sysrepo/xpath.h>
 #include <sysrepo/values.h>
 
+#include <libubus.h>
+#include <libubox/blobmsg.h>
+#include <libubox/blobmsg_json.h>
+#include <json-c/json.h>
+
 #include "common.h"
 #include "parse.h"
 
@@ -382,5 +387,108 @@ cleanup:
 		sr_session_stop(session);
 	}
 
+	return rc;
+}
+
+void ubus_cb(struct ubus_request *req, int type, struct blob_attr *msg) {
+	char xpath[XPATH_MAX_LEN] = {0};
+	ubus_ctx_t *ubus_ctx = req->priv;
+	struct json_object *r, *o, *v;
+	char *json_result = NULL;
+	int counter = 0;
+	int rc = SR_ERR_OK;
+    sr_val_t *sr_val = NULL;
+
+	if (msg) {
+		json_result = blobmsg_format_json(msg, true);
+		r = json_tokener_parse(json_result);
+	} else {
+		goto cleanup;
+	}
+
+	json_object_object_get_ex(r, "sip", &o);
+
+	/* get array size */
+	json_object_object_foreach(o, key_size, val_size) {
+		counter++;
+	}
+
+	rc = sr_new_values(counter * 3, &sr_val);
+	CHECK_RET(rc, cleanup, "failed sr_new_values: %s", sr_strerror(rc));
+
+	counter = 0;
+	json_object_object_foreach(o, key, val) {
+		snprintf(xpath, XPATH_MAX_LEN, "/sip:sip-status[account='%s']/account", key);
+		rc = sr_val_set_xpath(&sr_val[counter], xpath);
+		CHECK_RET(rc, cleanup, "failed sr_val_set_xpath: %s", sr_strerror(rc));
+		rc = sr_val_set_str_data(&sr_val[counter], SR_STRING_T, key);
+		CHECK_RET(rc, cleanup, "failed sr_val_set_str_data: %s", sr_strerror(rc));
+		counter++;
+
+		json_object_object_get_ex(val, "registered", &v);
+		snprintf(xpath, XPATH_MAX_LEN, "/sip:sip-status[account='%s']/registered", key);
+		rc = sr_val_set_xpath(&sr_val[counter], xpath);
+		CHECK_RET(rc, cleanup, "failed sr_val_set_xpath: %s", sr_strerror(rc));
+		(&sr_val[counter])->data.bool_val = json_object_get_boolean(v);
+		(&sr_val[counter])->type = SR_BOOL_T;
+		counter++;
+
+		json_object_object_get_ex(val, "state", &v);
+		snprintf(xpath, XPATH_MAX_LEN, "/sip:sip-status[account='%s']/state", key);
+		rc = sr_val_set_xpath(&sr_val[counter], xpath);
+		CHECK_RET(rc, cleanup, "failed sr_val_set_xpath: %s", sr_strerror(rc));
+		rc = sr_val_set_str_data(&sr_val[counter], SR_STRING_T, (char *) json_object_get_string(v));
+		CHECK_RET(rc, cleanup, "failed sr_val_set_str_data: %s", sr_strerror(rc));
+		counter++;
+	}
+
+	*ubus_ctx->values_cnt = counter;
+	*ubus_ctx->values = sr_val;
+
+cleanup:
+	if (NULL != json_result) {
+		free(json_result);
+	}
+	return;
+}
+
+int fill_state_data(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_cnt)
+{
+	int rc = SR_ERR_OK;
+	uint32_t id = 0;
+	struct blob_buf buf = {0,};
+	ubus_ctx_t ubus_ctx = {0,0,0};
+	int u_rc = UBUS_STATUS_OK;
+
+	DBG_MSG("connect")
+	struct ubus_context *u_ctx = ubus_connect(NULL);
+	if (u_ctx == NULL) {
+		ERR_MSG("Could not connect to ubus");
+		rc = SR_ERR_INTERNAL;
+		goto cleanup;
+	}
+
+	DBG_MSG("lookup")
+	blob_buf_init(&buf, 0);
+	u_rc = ubus_lookup_id(u_ctx, "asterisk", &id);
+	if (UBUS_STATUS_OK != u_rc) {
+		ERR("ubus [%d]: no object asterisk\n", u_rc);
+		rc = SR_ERR_INTERNAL;
+		goto cleanup;
+	}
+
+	DBG_MSG("invoke")
+	ubus_ctx.ctx = ctx;
+	ubus_ctx.values = values;
+	ubus_ctx.values_cnt = values_cnt;
+	u_rc = ubus_invoke(u_ctx, id, "status", buf.head, ubus_cb, &ubus_ctx, 0);
+	if (UBUS_STATUS_OK != u_rc) {
+		ERR("ubus [%d]: no object asterisk\n", u_rc);
+		rc = SR_ERR_INTERNAL;
+		goto cleanup;
+	}
+
+	DBG_MSG("exit")
+cleanup:
 	return rc;
 }
