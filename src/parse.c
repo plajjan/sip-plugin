@@ -95,7 +95,7 @@ static int parse_uci_config(ctx_t *ctx, char *key)
 		rc = get_uci_item(ctx->uctx, ucipath, &uci_val);
 		UCI_CHECK_RET(rc, cleanup, "get_uci_item %s", sr_strerror(rc));
 		INF("%s : %s", xpath, uci_val);
-		if (0 == strncmp(uci_val, "1", 1)) {
+		if (0 == strncmp(uci_val, "1", 1) || (0 == strncmp(uci_val, "true", 1)) || (0 == strncmp(uci_val, "on", 1))) {
 			rc = sr_set_item_str(ctx->startup_sess, xpath, "true", SR_EDIT_DEFAULT);
 		} else {
 			rc = sr_set_item_str(ctx->startup_sess, xpath, "false", SR_EDIT_DEFAULT);
@@ -214,6 +214,21 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 			if (key == NULL) {
 				rc = SR_ERR_INTERNAL;
 				goto error;
+			}
+		}
+
+		const int n_mappings_bool = ARR_SIZE(table_sr_uci_bool);
+		for (int i = 0; i < n_mappings_bool; i++) {
+			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci_bool[i].xpath, key);
+			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci_bool[i].ucipath, key);
+			if (0 == strncmp(xpath, new_val->xpath, strlen(xpath))) {
+				char *mem = NULL;
+				mem = sr_val_to_str(new_val);
+				CHECK_NULL(mem, &rc, uci_error, "sr_print_val %s", sr_strerror(rc));
+				rc = set_uci_item(ctx->uctx, ucipath, mem);
+				if (mem)
+					free(mem);
+				UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
 			}
 		}
 
