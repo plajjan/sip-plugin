@@ -1,23 +1,23 @@
 module sip {
 
-    namespace "urn:opencpe:sip";
+	namespace "urn:opencpe:sip";
 
-    prefix "ocpe-sip";
+	prefix "ocpe-sip";
 
-    organization
-        "Deutsche Telekom AG";
+	organization
+	    "Deutsche Telekom AG";
 
-    contact
-        "Landgrabenweg 151
-        53227 Bonn, Germany";
+	contact
+	    "Landgrabenweg 151
+	    53227 Bonn, Germany";
 
-    description
-        "This module defines SIP used in the TeraStream home gateway project.";
+	description
+	    "This module defines SIP used in the TeraStream home gateway project.";
 
-    revision "2017-08-09" {
-        description
-            "Version 0.2.0";
-    }
+	revision "2017-08-09" {
+	    description
+	        "Version 0.2.0";
+	}
 
 	container sip-config {
 		description
@@ -29,7 +29,7 @@ module sip {
 			default "true";
 		}
 
-	list sip-account {
+		list sip-account {
 			description
 			 "Sip account.";
 
@@ -62,7 +62,6 @@ module sip {
 			leaf password {
 				 description "password";
 				type string;
-				mandatory true;
 			}
 			leaf authentication_name {
 				 description "Name used for authentication on SIP server";
@@ -72,20 +71,17 @@ module sip {
 			leaf display_name {
 				 description "Display name used in Caller Id";
 				type string;
-				mandatory true;
 			}
-			container server {
-				leaf registrar {
-					 description "SIP server registrar";
-					type string;
-				}
-				leaf registrar_port {
-					 description "SIP server registrar port";
-					type uint32;
-					default '5060';
-				}
+			leaf host {
+				 description "SIP server registrar host";
+				type string;
 			}
-			container outbound_proxy {
+			leaf port {
+				 description "SIP server registrar port";
+				type uint32;
+				default '5060';
+			}
+			container outbound {
 				leaf proxy {
 					 description "SIP outbound proxy";
 					type string;

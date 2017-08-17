@@ -22,6 +22,10 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+#define XPATH_MAX_LEN 100
+
+#define ARR_SIZE(a) sizeof a / sizeof a[0]
+
 #include "sysrepo/plugins.h"
 
 #ifdef PLUGIN
@@ -73,6 +77,22 @@
 	do {                                                                                                                                             \
 		if (NULL == VALUE) {                                                                                                                         \
 			*RET = SR_ERR_NOMEM;                                                                                                                     \
+			ERR(MSG, __VA_ARGS__) SRP_LOG_ERR(MSG, __VA_ARGS__);                                                                                     \
+			goto LABEL;                                                                                                                              \
+		}                                                                                                                                            \
+	} while (0)
+
+#define UCI_CHECK_RET_MSG(RET, LABEL, MSG)                                                                                                           \
+	do {                                                                                                                                             \
+		if (UCI_OK != RET) {                                                                                                                         \
+			ERR_MSG(MSG) SRP_LOG_ERR_MSG(MSG);                                                                                                       \
+			goto LABEL;                                                                                                                              \
+		}                                                                                                                                            \
+	} while (0)
+
+#define UCI_CHECK_RET(RET, LABEL, MSG, ...)                                                                                                          \
+	do {                                                                                                                                             \
+		if (UCI_OK != RET) {                                                                                                                         \
 			ERR(MSG, __VA_ARGS__) SRP_LOG_ERR(MSG, __VA_ARGS__);                                                                                     \
 			goto LABEL;                                                                                                                              \
 		}                                                                                                                                            \

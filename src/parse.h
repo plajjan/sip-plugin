@@ -1,7 +1,7 @@
 /**
  * @file sip.h
  * @author Mislav Novakovic <mislav.novakovic@sartur.hr>
- * @brief header file for sip.c.
+ * @brief header file for parse.c.
  *
  * @copyright
  * Copyright (C) 2017 Deutsche Telekom AG.
@@ -19,24 +19,13 @@
  * limitations under the License.
  */
 
-#ifndef SIP_H
-#define SIP_H
+#ifndef PARSE_H
+#define PARSE_H
 
-#include <sysrepo.h>
-#include <sysrepo/plugins.h>
+#include "sip.h"
 
-#include <uci.h>
+int sync_datastores(ctx_t *ctx);
+int load_startup_datastore(ctx_t *ctx);
+int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val, sr_notif_event_t event);
 
-#define MAX_UCI_PATH 64
-
-typedef struct ctx_s {
-	const char* yang_model;
-	const char* config_file;
-	struct uci_context *uctx;
-	sr_session_ctx_t *sess;
-	sr_subscription_ctx_t *sub;
-	sr_conn_ctx_t *startup_conn;
-	sr_session_ctx_t *startup_sess;
-} ctx_t;
-
-#endif /* SIP_H */
+#endif /* PARSE_H */

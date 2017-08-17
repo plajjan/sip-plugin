@@ -8,12 +8,43 @@
 
 #include "common.h"
 #include "sip.h"
-
-#define XPATH_MAX_LEN 100
+#include "parse.h"
 
 /* name of the uci config file. */
-//static const char *config_file = "voice_client";
+static const char *config_file = "voice_client";
 static const char *yang_model = "sip";
+
+static int
+parse_change(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_notif_event_t event) {
+	sr_change_iter_t *it = NULL;
+	int rc = SR_ERR_OK;
+	sr_change_oper_t oper;
+	sr_val_t *old_value = NULL;
+	sr_val_t *new_value = NULL;
+	char xpath[XPATH_MAX_LEN] = {0,};
+
+	snprintf(xpath, XPATH_MAX_LEN, "/%s:*", module_name);
+
+	rc = sr_get_changes_iter(session, xpath , &it);
+	if (SR_ERR_OK != rc) {
+		printf("Get changes iter failed for xpath %s", xpath);
+		goto error;
+	}
+
+	while (SR_ERR_OK == sr_get_change_next(session, it, &oper, &old_value, &new_value)) {
+		rc = sysrepo_to_uci(ctx, oper, old_value, new_value, event);
+		sr_free_val(old_value);
+		sr_free_val(new_value);
+		CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
+	}
+
+error:
+	if (NULL != it) {
+		sr_free_change_iter(it);
+	}
+	return rc;
+}
+
 
 static int
 module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx) {
@@ -35,6 +66,7 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 		return SR_ERR_OK;
 	}
 
+	rc = parse_change(session, module_name, ctx, event);
 	CHECK_RET(rc, error, "failed to apply sysrepo changes to snabb: %s", sr_strerror(rc));
 
 error:
@@ -52,6 +84,10 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
     ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->sub = subscription;
 	ctx->sess = session;
+	ctx->startup_conn = NULL;
+	ctx->startup_sess = NULL;
+	ctx->yang_model = yang_model;
+	ctx->config_file = config_file;
     *private_ctx = ctx;
 
     /* Allocate UCI context for uci files. */
@@ -60,6 +96,15 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 		rc = SR_ERR_NOMEM;
     }
     CHECK_RET(rc, error, "Can't allocate uci context: %s", sr_strerror(rc));
+
+	/* load the startup datastore */
+	INF_MSG("load sysrepo startup datastore");
+	rc = load_startup_datastore(ctx);
+	CHECK_RET(rc, error, "failed to load startup datastore: %s", sr_strerror(rc));
+
+	/* sync sysrepo datastore and uci configuration file */
+	rc = sync_datastores(ctx);
+	CHECK_RET(rc, error, "failed to sync sysrepo datastore and cui configuration file: %s", sr_strerror(rc));
 
 	rc = sr_module_change_subscribe(ctx->sess, yang_model, module_change_cb, *private_ctx,
                                     0, SR_SUBSCR_DEFAULT, &ctx->sub);
@@ -86,7 +131,7 @@ sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx)
     sr_unsubscribe(session, ctx->sub);
     free(ctx);
 
-    SRP_LOG_DBG_MSG("Plugin cleaned-up successfully");
+    DBG_MSG("Plugin cleaned-up successfully");
 }
 
 #ifndef PLUGIN
