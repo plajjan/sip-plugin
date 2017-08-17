@@ -30,8 +30,8 @@
 #define MAX_UCI_PATH 64
 
 typedef struct ctx_s {
-	const char* yang_model;
-	const char* config_file;
+	const char *yang_model;
+	const char *config_file;
 	struct uci_context *uctx;
 	sr_session_ctx_t *sess;
 	sr_subscription_ctx_t *sub;

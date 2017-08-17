@@ -14,18 +14,20 @@
 static const char *config_file = "voice_client";
 static const char *yang_model = "sip";
 
-static int
-parse_change(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_notif_event_t event) {
+static int parse_change(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_notif_event_t event)
+{
 	sr_change_iter_t *it = NULL;
 	int rc = SR_ERR_OK;
 	sr_change_oper_t oper;
 	sr_val_t *old_value = NULL;
 	sr_val_t *new_value = NULL;
-	char xpath[XPATH_MAX_LEN] = {0,};
+	char xpath[XPATH_MAX_LEN] = {
+		0,
+	};
 
 	snprintf(xpath, XPATH_MAX_LEN, "/%s:*", module_name);
 
-	rc = sr_get_changes_iter(session, xpath , &it);
+	rc = sr_get_changes_iter(session, xpath, &it);
 	if (SR_ERR_OK != rc) {
 		printf("Get changes iter failed for xpath %s", xpath);
 		goto error;
@@ -45,9 +47,8 @@ error:
 	return rc;
 }
 
-
-static int
-module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx) {
+static int module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx)
+{
 	int rc = SR_ERR_OK;
 	ctx_t *ctx = private_ctx;
 	INF("%s configuration has changed.", yang_model);
@@ -73,29 +74,28 @@ error:
 	return rc;
 }
 
-int
-sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
+int sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 {
-    sr_subscription_ctx_t *subscription = NULL;
-    int rc = SR_ERR_OK;
+	sr_subscription_ctx_t *subscription = NULL;
+	int rc = SR_ERR_OK;
 
-    /* INF("sr_plugin_init_cb for sysrepo-plugin-dt-network"); */
+	/* INF("sr_plugin_init_cb for sysrepo-plugin-dt-network"); */
 
-    ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->sub = subscription;
 	ctx->sess = session;
 	ctx->startup_conn = NULL;
 	ctx->startup_sess = NULL;
 	ctx->yang_model = yang_model;
 	ctx->config_file = config_file;
-    *private_ctx = ctx;
+	*private_ctx = ctx;
 
-    /* Allocate UCI context for uci files. */
-    ctx->uctx = uci_alloc_context();
-    if (NULL == ctx->uctx) {
+	/* Allocate UCI context for uci files. */
+	ctx->uctx = uci_alloc_context();
+	if (NULL == ctx->uctx) {
 		rc = SR_ERR_NOMEM;
-    }
-    CHECK_RET(rc, error, "Can't allocate uci context: %s", sr_strerror(rc));
+	}
+	CHECK_RET(rc, error, "Can't allocate uci context: %s", sr_strerror(rc));
 
 	/* load the startup datastore */
 	INF_MSG("load sysrepo startup datastore");
@@ -106,32 +106,31 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 	rc = sync_datastores(ctx);
 	CHECK_RET(rc, error, "failed to sync sysrepo datastore and cui configuration file: %s", sr_strerror(rc));
 
-	rc = sr_module_change_subscribe(ctx->sess, yang_model, module_change_cb, *private_ctx,
-                                    0, SR_SUBSCR_DEFAULT, &ctx->sub);
-    CHECK_RET(rc, error, "initialization error: %s", sr_strerror(rc));
+	rc = sr_module_change_subscribe(ctx->sess, yang_model, module_change_cb, *private_ctx, 0, SR_SUBSCR_DEFAULT, &ctx->sub);
+	CHECK_RET(rc, error, "initialization error: %s", sr_strerror(rc));
 
-    INF_MSG("Plugin initialized successfully");
+	INF_MSG("Plugin initialized successfully");
 
-    return SR_ERR_OK;
+	return SR_ERR_OK;
 
-  error:
-    ERR("Plugin initialization failed: %s", sr_strerror(rc));
-    sr_unsubscribe(ctx->sess, ctx->sub);
-    free(ctx);
-    return rc;
+error:
+	ERR("Plugin initialization failed: %s", sr_strerror(rc));
+	sr_unsubscribe(ctx->sess, ctx->sub);
+	free(ctx);
+	return rc;
 }
 
-void
-sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx)
+void sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx)
 {
-    INF("Plugin cleanup called, private_ctx is %s available.", private_ctx ? "" : "not");
-    if (!private_ctx) return;
+	INF("Plugin cleanup called, private_ctx is %s available.", private_ctx ? "" : "not");
+	if (!private_ctx)
+		return;
 
-    ctx_t *ctx = private_ctx;
-    sr_unsubscribe(session, ctx->sub);
-    free(ctx);
+	ctx_t *ctx = private_ctx;
+	sr_unsubscribe(session, ctx->sub);
+	free(ctx);
 
-    DBG_MSG("Plugin cleaned-up successfully");
+	DBG_MSG("Plugin cleaned-up successfully");
 }
 
 #ifndef PLUGIN
@@ -140,14 +139,14 @@ sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx)
 
 volatile int exit_application = 0;
 
-static void
-sigint_handler(__attribute__((unused)) int signum) {
+static void sigint_handler(__attribute__((unused)) int signum)
+{
 	INF_MSG("Sigint called, exiting...");
 	exit_application = 1;
 }
 
-int
-main() {
+int main()
+{
 	INF_MSG("Plugin application mode initialized");
 	sr_conn_ctx_t *connection = NULL;
 	sr_session_ctx_t *session = NULL;
@@ -169,7 +168,7 @@ main() {
 	signal(SIGINT, sigint_handler);
 	signal(SIGPIPE, SIG_IGN);
 	while (!exit_application) {
-		sleep(1);  /* or do some more useful work... */
+		sleep(1); /* or do some more useful work... */
 	}
 
 	sr_plugin_cleanup_cb(session, private_ctx);
