@@ -94,4 +94,24 @@ module sip {
 			}
 		}
 	}
+
+	list sip-status {
+		description "State data about SIP.";
+		config false;
+
+		key account;
+
+		leaf account {
+			 description "Name of the SIP account";
+			type string;
+		}
+		leaf registered {
+			 description "SIP registration status";
+			type boolean;
+		}
+		leaf state {
+			 description "SIP connection status";
+			type string;
+		}
+	}
 }

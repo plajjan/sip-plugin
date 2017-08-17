@@ -82,6 +82,16 @@ error:
 	return rc;
 }
 
+static int state_data_cb(const char *xpath, sr_val_t **values, size_t *values_cnt, void *private_ctx)
+{
+    int rc = SR_ERR_OK;
+
+	INF_MSG("State data called");
+
+    return rc;
+}
+
+
 int sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 {
 	sr_subscription_ctx_t *subscription = NULL;
@@ -116,6 +126,9 @@ int sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 
 	rc = sr_module_change_subscribe(ctx->sess, yang_model, module_change_cb, *private_ctx, 0, SR_SUBSCR_DEFAULT, &ctx->sub);
 	CHECK_RET(rc, error, "initialization error: %s", sr_strerror(rc));
+
+	rc = sr_dp_get_items_subscribe(ctx->sess, "/sip:sip-status", state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
+	CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
 
 	INF_MSG("Plugin initialized successfully");
 
