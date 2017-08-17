@@ -222,12 +222,11 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci_bool[i].xpath, key);
 			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci_bool[i].ucipath, key);
 			if (0 == strncmp(xpath, new_val->xpath, strlen(xpath))) {
-				char *mem = NULL;
-				mem = sr_val_to_str(new_val);
-				CHECK_NULL(mem, &rc, uci_error, "sr_print_val %s", sr_strerror(rc));
-				rc = set_uci_item(ctx->uctx, ucipath, mem);
-				if (mem)
-					free(mem);
+				if (new_val->data.bool_val) {
+					rc = set_uci_item(ctx->uctx, ucipath, "1");
+				} else {
+					rc = set_uci_item(ctx->uctx, ucipath, "0");
+				}
 				UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
 			}
 		}
@@ -239,7 +238,7 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 			if (0 == strncmp(xpath, new_val->xpath, strlen(xpath))) {
 				char *mem = NULL;
 				mem = sr_val_to_str(new_val);
-				CHECK_NULL(mem, &rc, uci_error, "sr_print_val %s", sr_strerror(rc));
+				CHECK_NULL(mem, &rc, error, "sr_print_val %s", sr_strerror(rc));
 				rc = set_uci_item(ctx->uctx, ucipath, mem);
 				if (mem)
 					free(mem);
