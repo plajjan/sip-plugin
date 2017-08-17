@@ -1,5 +1,5 @@
-#include <uci.h>
-
+#include <sys/wait.h>
+#include <unistd.h>
 #include <uci.h>
 #include <sysrepo.h>
 #include <sysrepo/plugins.h>
@@ -86,6 +86,10 @@ static int parse_uci_config(ctx_t *ctx, char *key)
 	char ucipath[XPATH_MAX_LEN];
 	char *uci_val = calloc(1, 100);
 	int rc = SR_ERR_OK;
+
+	/* add asterisk boolean value */
+	rc = sr_set_item_str(ctx->startup_sess, "/sip:sip-config/enabled", "true", SR_EDIT_DEFAULT);
+	CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
 
 	/* parse uci boolean values only */
 	const int n_mappings_bool = ARR_SIZE(table_sr_uci_bool);
@@ -209,6 +213,23 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 
 	/* add/change leafs */
 	if (SR_OP_CREATED == op || SR_OP_MODIFIED == op) {
+
+		if (0 == strcmp(new_val->xpath,"/sip:sip-config/enabled")) {
+			INF_MSG("change asterisk state");
+			pid_t pid=fork();
+			if (pid==0) {
+				if (new_val->data.bool_val) {
+					execl("/etc/init.d/asterisk", "asterisk", "start", (char *) NULL);
+				} else {
+					execl("/etc/init.d/asterisk", "asterisk", "stop", (char *) NULL);
+				}
+				exit(127);
+			} else {
+				waitpid(pid, 0, 0);
+			}
+			return rc;
+		}
+
 		if (val_has_data(new_val->type)) {
 			key = get_key_value(new_val->xpath);
 			if (key == NULL) {
