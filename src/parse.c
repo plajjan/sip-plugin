@@ -85,6 +85,33 @@ exit:
 	return rc;
 }
 
+int get_secret(char *key, char **value)
+{
+	int rc = SR_ERR_OK;
+	FILE *fp;
+	char buf[XPATH_MAX_LEN];
+	char cmd[XPATH_MAX_LEN];
+	char *cmd_fmt = "/etc/sysrepo//scripts/sip/secret.sh %s";
+
+	sprintf(cmd, cmd_fmt, key);
+
+	if ((fp = popen(cmd, "r")) == NULL) {
+		fprintf(stderr, "Error opening pipe!\n");
+		return SR_ERR_INTERNAL;
+	}
+
+	if (fgets(buf, XPATH_MAX_LEN, fp) != NULL) {
+		*value = strdup(buf);
+	} else {
+		fprintf(stderr, "Error running %s command.\n", cmd);
+		return SR_ERR_INTERNAL;
+	}
+
+	rc = pclose(fp);
+
+	return rc;
+}
+
 static int parse_uci_config(ctx_t *ctx, char *key)
 {
 	char xpath[XPATH_MAX_LEN];
@@ -124,6 +151,15 @@ static int parse_uci_config(ctx_t *ctx, char *key)
 			CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
 		}
 	}
+
+	/* get asterisk secret */
+	char *secret = NULL;
+	rc = get_secret(key, &secret);
+	CHECK_RET(rc, cleanup, "failed to get asterisk secret: %s", sr_strerror(rc));
+	snprintf(xpath, XPATH_MAX_LEN, "/sip:sip-config/sip-account[account='%s']/password", key);
+	rc = sr_set_item_str(ctx->startup_sess, xpath, secret, SR_EDIT_DEFAULT);
+	CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
+	free(secret);
 
 cleanup:
 	if (SR_ERR_NOT_FOUND == rc) {
