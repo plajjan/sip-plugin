@@ -91,7 +91,7 @@ int get_secret(char *key, char **value)
 	FILE *fp;
 	char buf[XPATH_MAX_LEN];
 	char cmd[XPATH_MAX_LEN];
-	char *cmd_fmt = "/etc/sysrepo//scripts/sip/secret.sh %s";
+	char *cmd_fmt = "/etc/sysrepo/scripts/sip/secret.sh %s";
 
 	sprintf(cmd, cmd_fmt, key);
 
@@ -155,11 +155,15 @@ static int parse_uci_config(ctx_t *ctx, char *key)
 	/* get asterisk secret */
 	char *secret = NULL;
 	rc = get_secret(key, &secret);
-	CHECK_RET(rc, cleanup, "failed to get asterisk secret: %s", sr_strerror(rc));
-	snprintf(xpath, XPATH_MAX_LEN, "/sip:sip-config/sip-account[account='%s']/password", key);
-	rc = sr_set_item_str(ctx->startup_sess, xpath, secret, SR_EDIT_DEFAULT);
-	//CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
-	free(secret);
+	if (SR_ERR_OK == rc && NULL != secret) {
+		CHECK_RET(rc, cleanup, "failed to get asterisk secret: %s", sr_strerror(rc));
+		snprintf(xpath, XPATH_MAX_LEN, "/sip:sip-config/sip-account[account='%s']/password", key);
+		rc = sr_set_item_str(ctx->startup_sess, xpath, secret, SR_EDIT_DEFAULT);
+		CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
+		free(secret);
+	} else {
+		rc = SR_ERR_OK;
+	}
 
 cleanup:
 	if (SR_ERR_NOT_FOUND == rc) {
