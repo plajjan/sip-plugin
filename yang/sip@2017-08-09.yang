@@ -47,7 +47,6 @@ module sip {
 			leaf account_name {
 				 description "Name of the account";
 				type string;
-				mandatory true;
 			}
 			leaf domain {
 				 description "SIP doamin name";
@@ -56,17 +55,14 @@ module sip {
 			leaf username {
 				 description "username";
 				type string;
-				mandatory true;
 			}
 			leaf password {
 				 description "password";
 				type string;
-				mandatory true;
 			}
 			leaf authentication_name {
 				 description "Name used for authentication on SIP server";
 				type string;
-				mandatory true;
 			}
 			leaf display_name {
 				 description "Display name used in Caller Id";

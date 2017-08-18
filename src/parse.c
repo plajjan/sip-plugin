@@ -158,7 +158,7 @@ static int parse_uci_config(ctx_t *ctx, char *key)
 	CHECK_RET(rc, cleanup, "failed to get asterisk secret: %s", sr_strerror(rc));
 	snprintf(xpath, XPATH_MAX_LEN, "/sip:sip-config/sip-account[account='%s']/password", key);
 	rc = sr_set_item_str(ctx->startup_sess, xpath, secret, SR_EDIT_DEFAULT);
-	CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
+	//CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
 	free(secret);
 
 cleanup:
