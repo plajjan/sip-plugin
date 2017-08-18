@@ -52,7 +52,6 @@ module sip {
 			leaf domain {
 				 description "SIP doamin name";
 				type string;
-				mandatory true;
 			}
 			leaf username {
 				 description "username";
@@ -62,6 +61,7 @@ module sip {
 			leaf password {
 				 description "password";
 				type string;
+				mandatory true;
 			}
 			leaf authentication_name {
 				 description "Name used for authentication on SIP server";
