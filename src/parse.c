@@ -344,7 +344,7 @@ int sync_datastores(ctx_t *ctx)
 		}
 	}
 
-	//INF("VALUE count is %d", value_cnt);
+	INF("VALUE count is %d", value_cnt);
 
 	if (value_cnt <= 1) {
 		/* parse uci config */
@@ -460,7 +460,6 @@ int fill_state_data(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_c
 	ubus_ctx_t ubus_ctx = {0,0,0};
 	int u_rc = UBUS_STATUS_OK;
 
-	DBG_MSG("connect")
 	struct ubus_context *u_ctx = ubus_connect(NULL);
 	if (u_ctx == NULL) {
 		ERR_MSG("Could not connect to ubus");
@@ -468,7 +467,6 @@ int fill_state_data(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_c
 		goto cleanup;
 	}
 
-	DBG_MSG("lookup")
 	blob_buf_init(&buf, 0);
 	u_rc = ubus_lookup_id(u_ctx, "asterisk", &id);
 	if (UBUS_STATUS_OK != u_rc) {
@@ -477,7 +475,6 @@ int fill_state_data(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_c
 		goto cleanup;
 	}
 
-	DBG_MSG("invoke")
 	ubus_ctx.ctx = ctx;
 	ubus_ctx.values = values;
 	ubus_ctx.values_cnt = values_cnt;
@@ -488,7 +485,6 @@ int fill_state_data(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_c
 		goto cleanup;
 	}
 
-	DBG_MSG("exit")
 cleanup:
 	return rc;
 }
