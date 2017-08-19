@@ -20,13 +20,9 @@ typedef struct sr_uci_mapping {
 	char *xpath;
 } sr_uci_link;
 
-/* Mappings of uci options to Sysrepo xpaths. */
-static sr_uci_link table_sr_uci_bool[] = {
-	{"voice_client.%s.enabled", "/sip:sip-config/sip-account[account='%s']/enabled"},
-};
-
 static sr_uci_link table_sr_uci[] = {
 	{"voice_client.%s.name", "/sip:sip-config/sip-account[account='%s']/account_name"},
+	{"voice_client.%s.enabled", "/sip:sip-config/sip-account[account='%s']/enabled"},
 	{"voice_client.%s.domain", "/sip:sip-config/sip-account[account='%s']/domain"},
 	{"voice_client.%s.user", "/sip:sip-config/sip-account[account='%s']/username"},
 	{"voice_client.%s.secret", "/sip:sip-config/sip-account[account='%s']/password"},
@@ -147,22 +143,6 @@ static int parse_uci_config(ctx_t *ctx, char *key)
 	rc = sr_set_item_str(ctx->startup_sess, "/sip:sip-config/enabled", "true", SR_EDIT_DEFAULT);
 	CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
 
-	/* parse uci boolean values only */
-	const int n_mappings_bool = ARR_SIZE(table_sr_uci_bool);
-	for (int i = 0; i < n_mappings_bool; i++) {
-		snprintf(xpath, XPATH_MAX_LEN, table_sr_uci_bool[i].xpath, key);
-		snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci_bool[i].ucipath, key);
-		rc = get_uci_item(ctx->uctx, ucipath, &uci_val);
-		UCI_CHECK_RET(rc, cleanup, "get_uci_item %s", sr_strerror(rc));
-		INF("%s : %s", xpath, uci_val);
-		if (0 == strncmp(uci_val, "1", 1) || (0 == strncmp(uci_val, "true", 1)) || (0 == strncmp(uci_val, "on", 1))) {
-			rc = sr_set_item_str(ctx->startup_sess, xpath, "true", SR_EDIT_DEFAULT);
-		} else {
-			rc = sr_set_item_str(ctx->startup_sess, xpath, "false", SR_EDIT_DEFAULT);
-		}
-		CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
-	}
-
 	const int n_mappings = ARR_SIZE(table_sr_uci);
 	for (int i = 0; i < n_mappings; i++) {
 		snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
@@ -171,7 +151,18 @@ static int parse_uci_config(ctx_t *ctx, char *key)
 		if (UCI_ERR_NOTFOUND != rc) {
 			UCI_CHECK_RET(rc, cleanup, "get_uci_item %s", sr_strerror(rc));
 			INF("%s : %s", xpath, uci_val);
-			rc = sr_set_item_str(ctx->startup_sess, xpath, uci_val, SR_EDIT_DEFAULT);
+			/* check if boolean value */
+			char *enabled = NULL;
+			snprintf(enabled, XPATH_MAX_LEN, "voice_client.%s.enabled", key);
+			if (0 == strncmp(ucipath, enabled, strlen(ucipath))) {
+				if (0 == strncmp(uci_val, "1", 1) || (0 == strncmp(uci_val, "true", 1)) || (0 == strncmp(uci_val, "on", 1))) {
+					rc = sr_set_item_str(ctx->startup_sess, xpath, "true", SR_EDIT_DEFAULT);
+				} else {
+					rc = sr_set_item_str(ctx->startup_sess, xpath, "false", SR_EDIT_DEFAULT);
+				}
+			} else {
+				rc = sr_set_item_str(ctx->startup_sess, xpath, uci_val, SR_EDIT_DEFAULT);
+			}
 			CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
 		}
 	}
@@ -307,31 +298,25 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 		}
 
 		if (val_has_data(new_val->type)) {
-			const int n_mappings_bool = ARR_SIZE(table_sr_uci_bool);
-			for (int i = 0; i < n_mappings_bool; i++) {
-				snprintf(xpath, XPATH_MAX_LEN, table_sr_uci_bool[i].xpath, key);
-				snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci_bool[i].ucipath, key);
-				if (0 == strncmp(xpath, new_val->xpath, strlen(xpath))) {
-					if (new_val->data.bool_val) {
-						rc = set_uci_item(ctx->uctx, ucipath, "1");
-					} else {
-						rc = set_uci_item(ctx->uctx, ucipath, "0");
-					}
-					UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
-				}
-			}
-
 			const int n_mappings = ARR_SIZE(table_sr_uci);
 			for (int i = 0; i < n_mappings; i++) {
 				snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
 				snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
 				if (0 == strncmp(xpath, new_val->xpath, strlen(xpath))) {
-					char *mem = NULL;
-					mem = sr_val_to_str(new_val);
-					CHECK_NULL(mem, &rc, error, "sr_print_val %s", sr_strerror(rc));
-					rc = set_uci_item(ctx->uctx, ucipath, mem);
-					if (mem)
-						free(mem);
+					if (SR_BOOL_T == new_val->type) {
+						if (new_val->data.bool_val) {
+							rc = set_uci_item(ctx->uctx, ucipath, "1");
+						} else {
+							rc = set_uci_item(ctx->uctx, ucipath, "0");
+						}
+					} else {
+						char *mem = NULL;
+						mem = sr_val_to_str(new_val);
+						CHECK_NULL(mem, &rc, error, "sr_print_val %s", sr_strerror(rc));
+						rc = set_uci_item(ctx->uctx, ucipath, mem);
+						if (mem)
+							free(mem);
+					}
 					UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
 				}
 			}
