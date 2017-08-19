@@ -37,6 +37,30 @@ static sr_uci_link table_sr_uci[] = {
 	{"voice_client.%s.outboundproxyport", "/sip:sip-config/sip-account[account='%s']/outbound/port"},
 };
 
+int set_uci_section(ctx_t *ctx, char *section, char *name)
+{
+	int rc = UCI_OK;
+	char uci[XPATH_MAX_LEN];
+	struct uci_ptr ptr = {0};
+
+	sprintf(uci, "%s.%s=%s", ctx->config_file, name, section);
+
+	uci_lookup_ptr(ctx->uctx, &ptr, (char *) uci, true);
+	UCI_CHECK_RET(rc, error, "uci_lookup_ptr %d %s", rc, section);
+
+	uci_set(ctx->uctx, &ptr);
+	UCI_CHECK_RET(rc, error, "uci_set %d %s", rc, section);
+
+	uci_save(ctx->uctx, ptr.p);
+	UCI_CHECK_RET(rc, error, "UCI save error %d %s", rc, section);
+
+	uci_commit(ctx->uctx, &ptr.p, 1);
+	UCI_CHECK_RET(rc, error, "UCI commit error %d %s", rc, section);
+
+error:
+	return rc;
+}
+
 int get_uci_item(struct uci_context *uctx, char *ucipath, char **value)
 {
 	int rc = UCI_OK;
@@ -165,6 +189,7 @@ static int parse_uci_config(ctx_t *ctx, char *key)
 		rc = SR_ERR_OK;
 	}
 
+	rc = SR_ERR_OK;
 cleanup:
 	if (SR_ERR_NOT_FOUND == rc) {
 		rc = SR_ERR_OK;
@@ -259,10 +284,10 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 	/* add/change leafs */
 	if (SR_OP_CREATED == op || SR_OP_MODIFIED == op) {
 
-		if (0 == strcmp(new_val->xpath,"/sip:sip-config/enabled")) {
+		if (0 == strcmp(new_val->xpath, "/sip:sip-config/enabled")) {
 			INF_MSG("change asterisk state");
-			pid_t pid=fork();
-			if (pid==0) {
+			pid_t pid = fork();
+			if (pid == 0) {
 				if (new_val->data.bool_val) {
 					execl("/etc/init.d/asterisk", "asterisk", "start", (char *) NULL);
 				} else {
@@ -275,41 +300,47 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 			return rc;
 		}
 
+		key = get_key_value(new_val->xpath);
+		if (key == NULL) {
+			rc = SR_ERR_INTERNAL;
+			goto error;
+		}
+
 		if (val_has_data(new_val->type)) {
-			key = get_key_value(new_val->xpath);
-			if (key == NULL) {
-				rc = SR_ERR_INTERNAL;
-				goto error;
-			}
-		}
-
-		const int n_mappings_bool = ARR_SIZE(table_sr_uci_bool);
-		for (int i = 0; i < n_mappings_bool; i++) {
-			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci_bool[i].xpath, key);
-			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci_bool[i].ucipath, key);
-			if (0 == strncmp(xpath, new_val->xpath, strlen(xpath))) {
-				if (new_val->data.bool_val) {
-					rc = set_uci_item(ctx->uctx, ucipath, "1");
-				} else {
-					rc = set_uci_item(ctx->uctx, ucipath, "0");
+			const int n_mappings_bool = ARR_SIZE(table_sr_uci_bool);
+			for (int i = 0; i < n_mappings_bool; i++) {
+				snprintf(xpath, XPATH_MAX_LEN, table_sr_uci_bool[i].xpath, key);
+				snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci_bool[i].ucipath, key);
+				if (0 == strncmp(xpath, new_val->xpath, strlen(xpath))) {
+					if (new_val->data.bool_val) {
+						rc = set_uci_item(ctx->uctx, ucipath, "1");
+					} else {
+						rc = set_uci_item(ctx->uctx, ucipath, "0");
+					}
+					UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
 				}
-				UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
 			}
-		}
 
-		const int n_mappings = ARR_SIZE(table_sr_uci);
-		for (int i = 0; i < n_mappings; i++) {
-			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
-			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
-			if (0 == strncmp(xpath, new_val->xpath, strlen(xpath))) {
-				char *mem = NULL;
-				mem = sr_val_to_str(new_val);
-				CHECK_NULL(mem, &rc, error, "sr_print_val %s", sr_strerror(rc));
-				rc = set_uci_item(ctx->uctx, ucipath, mem);
-				if (mem)
-					free(mem);
-				UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
+			const int n_mappings = ARR_SIZE(table_sr_uci);
+			for (int i = 0; i < n_mappings; i++) {
+				snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
+				snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
+				if (0 == strncmp(xpath, new_val->xpath, strlen(xpath))) {
+					char *mem = NULL;
+					mem = sr_val_to_str(new_val);
+					CHECK_NULL(mem, &rc, error, "sr_print_val %s", sr_strerror(rc));
+					rc = set_uci_item(ctx->uctx, ucipath, mem);
+					if (mem)
+						free(mem);
+					UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
+				}
 			}
+		} else {
+			/* create new UCI section */
+			char *section = "sip_service_provider";
+			INF("\n\n ADD section %s\n\n",section);
+			rc = set_uci_section(ctx, section, key);
+			UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
 		}
 	}
 
@@ -323,18 +354,17 @@ uci_error:
 static int init_sysrepo_data(ctx_t *ctx)
 {
 	bool no_data = true;
-	struct uci_package *package = NULL;
 	struct uci_element *e;
 	struct uci_section *s;
 	int rc;
 
-	rc = uci_load(ctx->uctx, ctx->config_file, &package);
+	rc = uci_load(ctx->uctx, ctx->config_file, &ctx->package);
 	if (rc != UCI_OK) {
 		fprintf(stderr, "No configuration (package): %s\n", ctx->config_file);
 		goto cleanup;
 	}
 
-	uci_foreach_element(&package->sections, e)
+	uci_foreach_element(&ctx->package->sections, e)
 	{
 		s = uci_to_section(e);
 		if (!strcmp(s->type, "sip_service_provider")) {
@@ -357,8 +387,8 @@ static int init_sysrepo_data(ctx_t *ctx)
 	return SR_ERR_OK;
 
 cleanup:
-	if (package) {
-		uci_unload(ctx->uctx, package);
+	if (ctx->package) {
+		uci_unload(ctx->uctx, ctx->package);
 	}
 	return rc;
 }
@@ -384,7 +414,7 @@ int sync_datastores(ctx_t *ctx)
 		}
 	}
 
-	INF("VALUE count is %d", value_cnt);
+	DBG("number of sysrepo startup datastore elements is %d", value_cnt);
 
 	if (value_cnt <= 1) {
 		/* parse uci config */

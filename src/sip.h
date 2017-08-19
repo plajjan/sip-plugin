@@ -33,6 +33,7 @@ typedef struct ctx_s {
 	const char *yang_model;
 	const char *config_file;
 	struct uci_context *uctx;
+	struct uci_package *package;
 	sr_session_ctx_t *sess;
 	sr_subscription_ctx_t *sub;
 	sr_conn_ctx_t *startup_conn;
