@@ -24,20 +24,21 @@ typedef struct sr_uci_mapping {
 } sr_uci_link;
 
 static sr_uci_link table_sr_uci[] = {
-	{true, false, "sip_service_provider", "voice_client.%s", "/sip:sip-config/sip-account[account='%s']"},
-	{false, false, "name", "voice_client.%s.name", "/sip:sip-config/sip-account[account='%s']/account_name"},
-	{false, true, "enabled", "voice_client.%s.enabled", "/sip:sip-config/sip-account[account='%s']/enabled"},
-	{false, false, "domain", "voice_client.%s.domain", "/sip:sip-config/sip-account[account='%s']/domain"},
-	{false, false, "user", "voice_client.%s.user", "/sip:sip-config/sip-account[account='%s']/username"},
-	{false, false, "secret", "voice_client.%s.secret", "/sip:sip-config/sip-account[account='%s']/password"},
-	{false, false, "authuser", "voice_client.%s.authuser", "/sip:sip-config/sip-account[account='%s']/authentication_name"},
-	{false, false, "host", "voice_client.%s.host", "/sip:sip-config/sip-account[account='%s']/host"},
-	{false, false, "port", "voice_client.%s.port", "/sip:sip-config/sip-account[account='%s']/port"},
-	{false, false, "outboundproxy", "voice_client.%s.outboundproxy", "/sip:sip-config/sip-account[account='%s']/outbound/proxy"},
-	{false, false, "outboundproxyport", "voice_client.%s.outboundproxyport", "/sip:sip-config/sip-account[account='%s']/outbound/port"},
+	{true,  false, "sip_service_provider", "voice_client.%s",                   "/sip:sip-config/sip-account[account='%s']"},
+	{false, false, "name",                 "voice_client.%s.name",              "/sip:sip-config/sip-account[account='%s']/account_name"},
+	{false, true,  "enabled",              "voice_client.%s.enabled",           "/sip:sip-config/sip-account[account='%s']/enabled"},
+	{false, false, "domain",               "voice_client.%s.domain",            "/sip:sip-config/sip-account[account='%s']/domain"},
+	{false, false, "user",                 "voice_client.%s.user",              "/sip:sip-config/sip-account[account='%s']/username"},
+	{false, false, "secret",               "voice_client.%s.secret",            "/sip:sip-config/sip-account[account='%s']/password"},
+	{false, false, "authuser",             "voice_client.%s.authuser",          "/sip:sip-config/sip-account[account='%s']/authentication_name"},
+	{false, false, "host",                 "voice_client.%s.host",              "/sip:sip-config/sip-account[account='%s']/host"},
+	{false, false, "port",                 "voice_client.%s.port",              "/sip:sip-config/sip-account[account='%s']/port"},
+	{false, false, "outboundproxy",        "voice_client.%s.outboundproxy",     "/sip:sip-config/sip-account[account='%s']/outbound/proxy"},
+	{false, false, "outboundproxyport",    "voice_client.%s.outboundproxyport", "/sip:sip-config/sip-account[account='%s']/outbound/port"},
 };
 
-bool string_eq(char *first, char *second) {
+bool string_eq(char *first, char *second)
+{
 	if (0 == strncmp(first, second, strlen(first))) {
 		if (strlen(first) == strlen(second)) {
 			return true;
@@ -253,7 +254,8 @@ error:
 	return key ? strdup(key) : NULL;
 }
 
-int toggle_asterisk(sr_val_t *val) {
+int toggle_asterisk(sr_val_t *val)
+{
 	int rc = SR_ERR_OK;
 	pid_t pid = fork();
 
@@ -459,14 +461,15 @@ cleanup:
 	return rc;
 }
 
-void ubus_cb(struct ubus_request *req, int type, struct blob_attr *msg) {
+void ubus_cb(struct ubus_request *req, int type, struct blob_attr *msg)
+{
 	char xpath[XPATH_MAX_LEN] = {0};
 	ubus_ctx_t *ubus_ctx = req->priv;
 	struct json_object *r, *o, *v;
 	char *json_result = NULL;
 	int counter = 0;
 	int rc = SR_ERR_OK;
-    sr_val_t *sr_val = NULL;
+	sr_val_t *sr_val = NULL;
 
 	if (msg) {
 		json_result = blobmsg_format_json(msg, true);
@@ -478,7 +481,8 @@ void ubus_cb(struct ubus_request *req, int type, struct blob_attr *msg) {
 	json_object_object_get_ex(r, "sip", &o);
 
 	/* get array size */
-	json_object_object_foreach(o, key_size, val_size) {
+	json_object_object_foreach(o, key_size, val_size)
+	{
 		counter++;
 	}
 
@@ -486,7 +490,8 @@ void ubus_cb(struct ubus_request *req, int type, struct blob_attr *msg) {
 	CHECK_RET(rc, cleanup, "failed sr_new_values: %s", sr_strerror(rc));
 
 	counter = 0;
-	json_object_object_foreach(o, key, val) {
+	json_object_object_foreach(o, key, val)
+	{
 		snprintf(xpath, XPATH_MAX_LEN, "/sip:sip-status[account='%s']/account", key);
 		rc = sr_val_set_xpath(&sr_val[counter], xpath);
 		CHECK_RET(rc, cleanup, "failed sr_val_set_xpath: %s", sr_strerror(rc));
@@ -525,8 +530,8 @@ int fill_state_data(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_c
 {
 	int rc = SR_ERR_OK;
 	uint32_t id = 0;
-	struct blob_buf buf = {0,};
-	ubus_ctx_t ubus_ctx = {0,0,0};
+	struct blob_buf buf = {0};
+	ubus_ctx_t ubus_ctx = {0, 0, 0};
 	int u_rc = UBUS_STATUS_OK;
 
 	struct ubus_context *u_ctx = ubus_connect(NULL);
