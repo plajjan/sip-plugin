@@ -20,6 +20,10 @@ typedef struct sr_uci_mapping {
 	char *xpath;
 } sr_uci_link;
 
+static sr_uci_link table_sr_uci_section[] = {
+	{"voice_client.%s", "/sip:sip-config/sip-account[account='%s']"},
+};
+
 static sr_uci_link table_sr_uci[] = {
 	{"voice_client.%s.name", "/sip:sip-config/sip-account[account='%s']/account_name"},
 	{"voice_client.%s.enabled", "/sip:sip-config/sip-account[account='%s']/enabled"},
@@ -32,6 +36,36 @@ static sr_uci_link table_sr_uci[] = {
 	{"voice_client.%s.outboundproxy", "/sip:sip-config/sip-account[account='%s']/outbound/proxy"},
 	{"voice_client.%s.outboundproxyport", "/sip:sip-config/sip-account[account='%s']/outbound/port"},
 };
+
+bool xpath_equal(char *first, char *second) {
+	if (0 == strncmp(first, second, strlen(first))) {
+		if (strlen(first) == strlen(second)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+int uci_del(ctx_t *ctx, const char *uci)
+{
+	int rc = UCI_OK;
+	struct uci_ptr ptr = {};
+
+	uci_lookup_ptr(ctx->uctx, &ptr, (char *) uci, true);
+	UCI_CHECK_RET(rc, error, "uci_lookup_ptr %d, path %s", rc, uci);
+
+	uci_delete(ctx->uctx, &ptr);
+	UCI_CHECK_RET(rc, error, "uci_set %d, path %s", rc, uci);
+
+	uci_save(ctx->uctx, ptr.p);
+	UCI_CHECK_RET(rc, error, "UCI save error %d, path %s", rc, uci);
+
+	uci_commit(ctx->uctx, &ptr.p, 1);
+	UCI_CHECK_RET(rc, error, "UCI commit error %d, path %s", rc, uci);
+
+error:
+	return rc;
+}
 
 int set_uci_section(ctx_t *ctx, char *section, char *name)
 {
@@ -149,7 +183,7 @@ static int parse_uci_config(ctx_t *ctx, char *key)
 		snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
 		rc = get_uci_item(ctx->uctx, ucipath, &uci_val);
 		if (UCI_ERR_NOTFOUND != rc) {
-			UCI_CHECK_RET(rc, cleanup, "get_uci_item %s", sr_strerror(rc));
+			UCI_CHECK_RET(rc, cleanup, "get_uci_item %d", rc);
 			INF("%s : %s", xpath, uci_val);
 			/* check if boolean value */
 			char *enabled = NULL;
@@ -291,13 +325,14 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 	char *key = NULL;
 	int rc = SR_ERR_OK;
 
-	/* add/change leafs */
 	if (SR_OP_CREATED == op || SR_OP_MODIFIED == op) {
-
 		if (0 == strcmp(new_val->xpath, "/sip:sip-config/enabled")) {
 			return toggle_asterisk(new_val);
 		}
+	}
 
+	/* add/change leafs */
+	if (SR_OP_CREATED == op || SR_OP_MODIFIED == op) {
 		key = get_key_value(new_val->xpath);
 		if (key == NULL) {
 			rc = SR_ERR_INTERNAL;
@@ -309,7 +344,7 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 			for (int i = 0; i < n_mappings; i++) {
 				snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
 				snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
-				if (0 == strncmp(xpath, new_val->xpath, strlen(xpath))) {
+				if (xpath_equal(xpath, new_val->xpath)) {
 					if (SR_BOOL_T == new_val->type) {
 						if (new_val->data.bool_val) {
 							rc = set_uci_item(ctx->uctx, ucipath, "1");
@@ -324,19 +359,46 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 						if (mem)
 							free(mem);
 					}
-					UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
+					UCI_CHECK_RET(rc, uci_error, "get_uci_item %x", rc);
 				}
 			}
 		} else {
 			/* create new UCI section */
+			/* TODO make more general */
 			char *section = "sip_service_provider";
-			INF("\n\n ADD section %s\n\n",section);
 			rc = set_uci_section(ctx, section, key);
-			UCI_CHECK_RET(rc, uci_error, "get_uci_item %s", sr_strerror(rc));
+			UCI_CHECK_RET(rc, uci_error, "get_uci_item %d", rc);
+		}
+	} else if (SR_OP_DELETED == op) {
+		key = get_key_value(old_val->xpath);
+		if (key == NULL) {
+			rc = SR_ERR_INTERNAL;
+			goto error;
+		}
+
+		const int n_mappings = ARR_SIZE(table_sr_uci);
+		for (int i = 0; i < n_mappings; i++) {
+			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
+			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
+			/* delete lists */
+			if (xpath_equal(xpath, old_val->xpath)) {
+				rc = uci_del(ctx, ucipath);
+				UCI_CHECK_RET(rc, uci_error, "uci_del %d", rc);
+			}
+		}
+		const int n_mappings_section = ARR_SIZE(table_sr_uci_section);
+		for (int i = 0; i < n_mappings_section; i++) {
+			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci_section[i].xpath, key);
+			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci_section[i].ucipath, key);
+			/* delete lists */
+			if (xpath_equal(xpath, old_val->xpath)) {
+				rc = uci_del(ctx, ucipath);
+				UCI_CHECK_RET(rc, uci_error, "uci_del %d", rc);
+			}
 		}
 	}
 
-	return rc;
+	return SR_ERR_OK;
 error:
 	return rc;
 uci_error:
