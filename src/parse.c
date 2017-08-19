@@ -276,63 +276,67 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 {
 	char xpath[XPATH_MAX_LEN];
 	char ucipath[XPATH_MAX_LEN];
+	char *orig_xpath = NULL;
 	char *key = NULL;
 	int rc = SR_ERR_OK;
 
 	if (SR_OP_CREATED == op || SR_OP_MODIFIED == op) {
-		if (0 == strcmp(new_val->xpath, "/sip:sip-config/enabled")) {
-			return toggle_asterisk(new_val);
-		}
+		orig_xpath = new_val->xpath;
+	} else if (SR_OP_DELETED == op) {
+		orig_xpath = old_val->xpath;
+	} else {
+		return rc;
+	}
+
+	if (string_eq(orig_xpath, "/sip:sip-config/enabled")) {
+		return toggle_asterisk(new_val);
+	}
+
+	key = get_key_value(orig_xpath);
+	if (key == NULL) {
+		rc = SR_ERR_INTERNAL;
+		goto error;
 	}
 
 	/* add/change leafs */
 	if (SR_OP_CREATED == op || SR_OP_MODIFIED == op) {
-		key = get_key_value(new_val->xpath);
-		if (key == NULL) {
-			rc = SR_ERR_INTERNAL;
-			goto error;
-		}
 
 		const int n_mappings = ARR_SIZE(table_sr_uci);
 		for (int i = 0; i < n_mappings; i++) {
 			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
 			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
-			if (table_sr_uci[i].section) {
-				sprintf(ucipath, "%s.%s=%s", ctx->config_file, key, table_sr_uci[i].element);
-				rc = set_uci_section(ctx, ucipath);
-				UCI_CHECK_RET(rc, uci_error, "get_uci_section %d", rc);
-			} else {
-				if (table_sr_uci[i].boolean) {
-					if (new_val->data.bool_val) {
-						rc = set_uci_item(ctx->uctx, ucipath, "1");
-					} else {
-						rc = set_uci_item(ctx->uctx, ucipath, "0");
-					}
+			if (string_eq(xpath, orig_xpath)) {
+				if (table_sr_uci[i].section) {
+					sprintf(ucipath, "%s.%s=%s", ctx->config_file, key, table_sr_uci[i].element);
+					rc = set_uci_section(ctx, ucipath);
+					UCI_CHECK_RET(rc, uci_error, "get_uci_section %d", rc);
 				} else {
-					char *mem = NULL;
-					mem = sr_val_to_str(new_val);
-					CHECK_NULL(mem, &rc, error, "sr_print_val %s", sr_strerror(rc));
-					rc = set_uci_item(ctx->uctx, ucipath, mem);
-					if (mem) {
-						free(mem);
+					if (table_sr_uci[i].boolean) {
+						if (new_val->data.bool_val) {
+							rc = set_uci_item(ctx->uctx, ucipath, "1");
+						} else {
+							rc = set_uci_item(ctx->uctx, ucipath, "0");
+						}
+					} else {
+						char *mem = NULL;
+						mem = sr_val_to_str(new_val);
+						CHECK_NULL(mem, &rc, error, "sr_print_val %s", sr_strerror(rc));
+						rc = set_uci_item(ctx->uctx, ucipath, mem);
+						if (mem) {
+							free(mem);
+						}
 					}
+					UCI_CHECK_RET(rc, uci_error, "set_uci_item %x", rc);
 				}
-				UCI_CHECK_RET(rc, uci_error, "set_uci_item %x", rc);
 			}
 		}
 	} else if (SR_OP_DELETED == op) {
-		key = get_key_value(old_val->xpath);
-		if (key == NULL) {
-			rc = SR_ERR_INTERNAL;
-			goto error;
-		}
-
 		const int n_mappings = ARR_SIZE(table_sr_uci);
 		for (int i = 0; i < n_mappings; i++) {
 			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
 			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
 			/* delete lists */
-			if (string_eq(xpath, old_val->xpath)) {
+			if (string_eq(xpath, orig_xpath)) {
 				rc = uci_del(ctx, ucipath);
 				UCI_CHECK_RET(rc, uci_error, "uci_del %d", rc);
 			}
