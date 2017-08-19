@@ -16,28 +16,29 @@
 
 /* Configuration part of the plugin. */
 typedef struct sr_uci_mapping {
+	char *element;
 	char *ucipath;
 	char *xpath;
 } sr_uci_link;
 
 static sr_uci_link table_sr_uci_section[] = {
-	{"voice_client.%s", "/sip:sip-config/sip-account[account='%s']"},
+	{"sip_service_provider", "voice_client.%s", "/sip:sip-config/sip-account[account='%s']"},
 };
 
 static sr_uci_link table_sr_uci[] = {
-	{"voice_client.%s.name", "/sip:sip-config/sip-account[account='%s']/account_name"},
-	{"voice_client.%s.enabled", "/sip:sip-config/sip-account[account='%s']/enabled"},
-	{"voice_client.%s.domain", "/sip:sip-config/sip-account[account='%s']/domain"},
-	{"voice_client.%s.user", "/sip:sip-config/sip-account[account='%s']/username"},
-	{"voice_client.%s.secret", "/sip:sip-config/sip-account[account='%s']/password"},
-	{"voice_client.%s.authuser", "/sip:sip-config/sip-account[account='%s']/authentication_name"},
-	{"voice_client.%s.host", "/sip:sip-config/sip-account[account='%s']/host"},
-	{"voice_client.%s.port", "/sip:sip-config/sip-account[account='%s']/port"},
-	{"voice_client.%s.outboundproxy", "/sip:sip-config/sip-account[account='%s']/outbound/proxy"},
-	{"voice_client.%s.outboundproxyport", "/sip:sip-config/sip-account[account='%s']/outbound/port"},
+	{"name", "voice_client.%s.name", "/sip:sip-config/sip-account[account='%s']/account_name"},
+	{"enabled", "voice_client.%s.enabled", "/sip:sip-config/sip-account[account='%s']/enabled"},
+	{"domain", "voice_client.%s.domain", "/sip:sip-config/sip-account[account='%s']/domain"},
+	{"user", "voice_client.%s.user", "/sip:sip-config/sip-account[account='%s']/username"},
+	{"secret", "voice_client.%s.secret", "/sip:sip-config/sip-account[account='%s']/password"},
+	{"authuser", "voice_client.%s.authuser", "/sip:sip-config/sip-account[account='%s']/authentication_name"},
+	{"host", "voice_client.%s.host", "/sip:sip-config/sip-account[account='%s']/host"},
+	{"port", "voice_client.%s.port", "/sip:sip-config/sip-account[account='%s']/port"},
+	{"outboundproxy", "voice_client.%s.outboundproxy", "/sip:sip-config/sip-account[account='%s']/outbound/proxy"},
+	{"outboundproxyport", "voice_client.%s.outboundproxyport", "/sip:sip-config/sip-account[account='%s']/outbound/port"},
 };
 
-bool xpath_equal(char *first, char *second) {
+bool string_eq(char *first, char *second) {
 	if (0 == strncmp(first, second, strlen(first))) {
 		if (strlen(first) == strlen(second)) {
 			return true;
@@ -67,25 +68,22 @@ error:
 	return rc;
 }
 
-int set_uci_section(ctx_t *ctx, char *section, char *name)
+int set_uci_section(ctx_t *ctx, char *uci)
 {
 	int rc = UCI_OK;
-	char uci[XPATH_MAX_LEN];
 	struct uci_ptr ptr = {0};
 
-	sprintf(uci, "%s.%s=%s", ctx->config_file, name, section);
-
 	uci_lookup_ptr(ctx->uctx, &ptr, (char *) uci, true);
-	UCI_CHECK_RET(rc, error, "uci_lookup_ptr %d %s", rc, section);
+	UCI_CHECK_RET(rc, error, "uci_lookup_ptr %d, path %s", rc, uci);
 
 	uci_set(ctx->uctx, &ptr);
-	UCI_CHECK_RET(rc, error, "uci_set %d %s", rc, section);
+	UCI_CHECK_RET(rc, error, "uci_set %d, path %s", rc, uci);
 
 	uci_save(ctx->uctx, ptr.p);
-	UCI_CHECK_RET(rc, error, "UCI save error %d %s", rc, section);
+	UCI_CHECK_RET(rc, error, "UCI save error %d, path %s", rc, uci);
 
 	uci_commit(ctx->uctx, &ptr.p, 1);
-	UCI_CHECK_RET(rc, error, "UCI commit error %d %s", rc, section);
+	UCI_CHECK_RET(rc, error, "UCI commit error %d, path %s", rc, uci);
 
 error:
 	return rc;
@@ -226,49 +224,6 @@ cleanup:
 	return rc;
 }
 
-bool val_has_data(sr_type_t type)
-{
-	/* types containing some data */
-	if (type == SR_BINARY_T)
-		return true;
-	else if (type == SR_BITS_T)
-		return true;
-	else if (type == SR_BOOL_T)
-		return true;
-	else if (type == SR_DECIMAL64_T)
-		return true;
-	else if (type == SR_ENUM_T)
-		return true;
-	else if (type == SR_IDENTITYREF_T)
-		return true;
-	else if (type == SR_INSTANCEID_T)
-		return true;
-	else if (type == SR_INT8_T)
-		return true;
-	else if (type == SR_INT16_T)
-		return true;
-	else if (type == SR_INT32_T)
-		return true;
-	else if (type == SR_INT64_T)
-		return true;
-	else if (type == SR_STRING_T)
-		return true;
-	else if (type == SR_UINT8_T)
-		return true;
-	else if (type == SR_UINT16_T)
-		return true;
-	else if (type == SR_UINT32_T)
-		return true;
-	else if (type == SR_UINT64_T)
-		return true;
-	else if (type == SR_ANYXML_T)
-		return true;
-	else if (type == SR_ANYDATA_T)
-		return true;
-	else
-		return false;
-}
-
 char *get_key_value(char *orig_xpath)
 {
 	char *key = NULL, *node = NULL, *xpath = NULL;
@@ -339,35 +294,38 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 			goto error;
 		}
 
-		if (val_has_data(new_val->type)) {
-			const int n_mappings = ARR_SIZE(table_sr_uci);
-			for (int i = 0; i < n_mappings; i++) {
-				snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
-				snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
-				if (xpath_equal(xpath, new_val->xpath)) {
-					if (SR_BOOL_T == new_val->type) {
-						if (new_val->data.bool_val) {
-							rc = set_uci_item(ctx->uctx, ucipath, "1");
-						} else {
-							rc = set_uci_item(ctx->uctx, ucipath, "0");
-						}
+		const int n_mappings = ARR_SIZE(table_sr_uci);
+		for (int i = 0; i < n_mappings; i++) {
+			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
+			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
+			if (string_eq(xpath, new_val->xpath)) {
+				if (SR_BOOL_T == new_val->type) {
+					if (new_val->data.bool_val) {
+						rc = set_uci_item(ctx->uctx, ucipath, "1");
 					} else {
-					char *mem = NULL;
-						mem = sr_val_to_str(new_val);
-						CHECK_NULL(mem, &rc, error, "sr_print_val %s", sr_strerror(rc));
-						rc = set_uci_item(ctx->uctx, ucipath, mem);
-						if (mem)
-							free(mem);
+						rc = set_uci_item(ctx->uctx, ucipath, "0");
 					}
-					UCI_CHECK_RET(rc, uci_error, "get_uci_item %x", rc);
+				} else {
+				char *mem = NULL;
+					mem = sr_val_to_str(new_val);
+					CHECK_NULL(mem, &rc, error, "sr_print_val %s", sr_strerror(rc));
+					rc = set_uci_item(ctx->uctx, ucipath, mem);
+					if (mem)
+						free(mem);
 				}
+				UCI_CHECK_RET(rc, uci_error, "get_uci_item %x", rc);
 			}
-		} else {
-			/* create new UCI section */
-			/* TODO make more general */
-			char *section = "sip_service_provider";
-			rc = set_uci_section(ctx, section, key);
-			UCI_CHECK_RET(rc, uci_error, "get_uci_item %d", rc);
+		}
+		const int n_mappings_section = ARR_SIZE(table_sr_uci_section);
+		for (int i = 0; i < n_mappings_section; i++) {
+			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci_section[i].xpath, key);
+			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci_section[i].ucipath, key);
+			if (string_eq(xpath, new_val->xpath)) {
+				sprintf(ucipath, "%s.%s=%s", ctx->config_file, key, table_sr_uci_section[i].element);
+				INF("UCIPATH %s", ucipath);
+				rc = set_uci_section(ctx, ucipath);
+				UCI_CHECK_RET(rc, uci_error, "get_uci_item %d", rc);
+			}
 		}
 	} else if (SR_OP_DELETED == op) {
 		key = get_key_value(old_val->xpath);
@@ -381,7 +339,7 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
 			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
 			/* delete lists */
-			if (xpath_equal(xpath, old_val->xpath)) {
+			if (string_eq(xpath, old_val->xpath)) {
 				rc = uci_del(ctx, ucipath);
 				UCI_CHECK_RET(rc, uci_error, "uci_del %d", rc);
 			}
@@ -391,7 +349,7 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 			snprintf(xpath, XPATH_MAX_LEN, table_sr_uci_section[i].xpath, key);
 			snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci_section[i].ucipath, key);
 			/* delete lists */
-			if (xpath_equal(xpath, old_val->xpath)) {
+			if (string_eq(xpath, old_val->xpath)) {
 				rc = uci_del(ctx, ucipath);
 				UCI_CHECK_RET(rc, uci_error, "uci_del %d", rc);
 			}
