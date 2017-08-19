@@ -90,12 +90,6 @@ static int state_data_cb(const char *xpath, sr_val_t **values, size_t *values_cn
 	rc = fill_state_data(ctx, (char *) xpath, values, values_cnt);
 	CHECK_RET(rc, error, "failed to load state data: %s", sr_strerror(rc));
 
-	/*
-	for (int i = 0; i < *values_cnt; i++) {
-		sr_print_val(&(*values)[i]);
-	}
-	*/
-
 error:
     return rc;
 }

@@ -171,23 +171,17 @@ static int parse_uci_config(ctx_t *ctx, char *key)
 	char *uci_val = calloc(1, 100);
 	int rc = SR_ERR_OK;
 
-	/* add asterisk boolean value */
-	rc = sr_set_item_str(ctx->startup_sess, "/sip:sip-config/enabled", "true", SR_EDIT_DEFAULT);
-	CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
-
 	const int n_mappings = ARR_SIZE(table_sr_uci);
 	for (int i = 0; i < n_mappings; i++) {
 		snprintf(xpath, XPATH_MAX_LEN, table_sr_uci[i].xpath, key);
 		snprintf(ucipath, XPATH_MAX_LEN, table_sr_uci[i].ucipath, key);
 		rc = get_uci_item(ctx->uctx, ucipath, &uci_val);
-		if (UCI_ERR_NOTFOUND != rc) {
+		if (UCI_OK == rc) {
 			UCI_CHECK_RET(rc, cleanup, "get_uci_item %d", rc);
 			INF("%s : %s", xpath, uci_val);
 			/* check if boolean value */
-			char *enabled = NULL;
-			snprintf(enabled, XPATH_MAX_LEN, "voice_client.%s.enabled", key);
-			if (0 == strncmp(ucipath, enabled, strlen(ucipath))) {
-				if (0 == strncmp(uci_val, "1", 1) || (0 == strncmp(uci_val, "true", 1)) || (0 == strncmp(uci_val, "on", 1))) {
+			if (table_sr_uci[i].boolean) {
+				if (0 == string_eq(uci_val, "1") || (0 == string_eq(uci_val, "true")) || (0 == string_eq(uci_val, "on"))) {
 					rc = sr_set_item_str(ctx->startup_sess, xpath, "true", SR_EDIT_DEFAULT);
 				} else {
 					rc = sr_set_item_str(ctx->startup_sess, xpath, "false", SR_EDIT_DEFAULT);
@@ -368,7 +362,7 @@ static int init_sysrepo_data(ctx_t *ctx)
 	uci_foreach_element(&ctx->package->sections, e)
 	{
 		s = uci_to_section(e);
-		if (!strcmp(s->type, "sip_service_provider")) {
+		if (string_eq(s->type, "sip_service_provider")) {
 			INF("key value is: %s", s->e.name)
 			rc = parse_uci_config(ctx, s->e.name);
 			CHECK_RET(rc, cleanup, "failed to add sysrepo data: %s", sr_strerror(rc));
@@ -380,6 +374,10 @@ static int init_sysrepo_data(ctx_t *ctx)
 		WRN_MSG("UCI config file 'uci_client' does not have section 'sip_service_provider'")
 		rc = SR_ERR_INTERNAL;
 	}
+
+	/* add asterisk boolean value */
+	rc = sr_set_item_str(ctx->startup_sess, "/sip:sip-config/enabled", "true", SR_EDIT_DEFAULT);
+	CHECK_RET(rc, cleanup, "failed sr_set_item_str: %s", sr_strerror(rc));
 
 	/* commit the changes to startup datastore */
 	rc = sr_commit(ctx->startup_sess);
@@ -481,9 +479,10 @@ void ubus_cb(struct ubus_request *req, int type, struct blob_attr *msg)
 	json_object_object_get_ex(r, "sip", &o);
 
 	/* get array size */
-	json_object_object_foreach(o, key_size, val_size)
-	{
-		counter++;
+	json_object_object_foreach(o, key_tmp, val_tmp) {
+		if (NULL != key_tmp && NULL != val_tmp) {
+			counter++;
+		}
 	}
 
 	rc = sr_new_values(counter * 3, &sr_val);
