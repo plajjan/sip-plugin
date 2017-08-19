@@ -265,6 +265,25 @@ error:
 	return key ? strdup(key) : NULL;
 }
 
+int toggle_asterisk(sr_val_t *val) {
+	int rc = SR_ERR_OK;
+	pid_t pid = fork();
+
+	INF_MSG("change asterisk state");
+
+	if (pid == 0) {
+		if (val->data.bool_val) {
+			execl("/etc/init.d/asterisk", "asterisk", "start", (char *) NULL);
+		} else {
+			execl("/etc/init.d/asterisk", "asterisk", "stop", (char *) NULL);
+		}
+		exit(127);
+	} else {
+		waitpid(pid, 0, 0);
+	}
+	return rc;
+}
+
 int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val, sr_notif_event_t event)
 {
 	char xpath[XPATH_MAX_LEN];
@@ -276,19 +295,7 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 	if (SR_OP_CREATED == op || SR_OP_MODIFIED == op) {
 
 		if (0 == strcmp(new_val->xpath, "/sip:sip-config/enabled")) {
-			INF_MSG("change asterisk state");
-			pid_t pid = fork();
-			if (pid == 0) {
-				if (new_val->data.bool_val) {
-					execl("/etc/init.d/asterisk", "asterisk", "start", (char *) NULL);
-				} else {
-					execl("/etc/init.d/asterisk", "asterisk", "stop", (char *) NULL);
-				}
-				exit(127);
-			} else {
-				waitpid(pid, 0, 0);
-			}
-			return rc;
+			return toggle_asterisk(new_val);
 		}
 
 		key = get_key_value(new_val->xpath);
@@ -310,7 +317,7 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 							rc = set_uci_item(ctx->uctx, ucipath, "0");
 						}
 					} else {
-						char *mem = NULL;
+					char *mem = NULL;
 						mem = sr_val_to_str(new_val);
 						CHECK_NULL(mem, &rc, error, "sr_print_val %s", sr_strerror(rc));
 						rc = set_uci_item(ctx->uctx, ucipath, mem);
