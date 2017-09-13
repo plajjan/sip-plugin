@@ -96,13 +96,12 @@ error:
 
 int sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 {
-	sr_subscription_ctx_t *subscription = NULL;
 	int rc = SR_ERR_OK;
 
 	/* INF("sr_plugin_init_cb for sysrepo-plugin-dt-network"); */
 
 	ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->sub = subscription;
+	ctx->sub = NULL;
 	ctx->sess = session;
 	ctx->startup_conn = NULL;
 	ctx->startup_sess = NULL;
@@ -138,8 +137,10 @@ int sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 
 error:
 	ERR("Plugin initialization failed: %s", sr_strerror(rc));
-	sr_unsubscribe(ctx->sess, ctx->sub);
-	free(ctx);
+	if (NULL != ctx->sub) {
+		sr_unsubscribe(ctx->sess, ctx->sub);
+		ctx->sub = NULL;
+	}
 	return rc;
 }
 
@@ -150,7 +151,22 @@ void sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx)
 		return;
 
 	ctx_t *ctx = private_ctx;
-	sr_unsubscribe(session, ctx->sub);
+	if (NULL == ctx) {
+		return;
+	}
+	/* clean startup datastore */
+	if (NULL != ctx->startup_sess) {
+		sr_session_stop(ctx->startup_sess);
+	}
+	if (NULL != ctx->startup_conn) {
+		sr_disconnect(ctx->startup_conn);
+	}
+	if (NULL != ctx->sub) {
+		sr_unsubscribe(session, ctx->sub);
+	}
+	if (ctx->uctx) {
+		uci_free_context(ctx->uctx);
+	}
 	free(ctx);
 
 	DBG_MSG("Plugin cleaned-up successfully");
@@ -194,8 +210,8 @@ int main()
 		sleep(1); /* or do some more useful work... */
 	}
 
-	sr_plugin_cleanup_cb(session, private_ctx);
 cleanup:
+	sr_plugin_cleanup_cb(session, private_ctx);
 	if (NULL != session) {
 		sr_session_stop(session);
 	}

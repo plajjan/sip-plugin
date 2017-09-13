@@ -142,8 +142,8 @@ int get_secret(char *key, char **value)
 {
 	int rc = SR_ERR_OK;
 	FILE *fp;
-	char buf[XPATH_MAX_LEN];
-	char cmd[XPATH_MAX_LEN];
+	char buf[XPATH_MAX_LEN] = {0};
+	char cmd[XPATH_MAX_LEN] = {0};
 	char *cmd_fmt = "/etc/sysrepo/scripts/sip/secret.sh %s";
 
 	sprintf(cmd, cmd_fmt, key);
@@ -167,8 +167,8 @@ int get_secret(char *key, char **value)
 
 static int parse_uci_config(ctx_t *ctx, char *key)
 {
-	char xpath[XPATH_MAX_LEN];
-	char ucipath[XPATH_MAX_LEN];
+	char xpath[XPATH_MAX_LEN] = {0};
+	char ucipath[XPATH_MAX_LEN] = {0};
 	char *uci_val = calloc(1, 100);
 	int rc = SR_ERR_OK;
 
@@ -224,7 +224,7 @@ char *get_key_value(char *orig_xpath)
 	char *key = NULL, *node = NULL, *xpath = NULL;
 	sr_xpath_ctx_t state = {0, 0, 0, 0};
 
-	xpath = strdup(orig_xpath);
+	xpath = orig_xpath;
 
 	node = sr_xpath_next_node(xpath, &state);
 	if (NULL == node) {
@@ -243,9 +243,6 @@ char *get_key_value(char *orig_xpath)
 	}
 
 error:
-	if (NULL != xpath) {
-		free(xpath);
-	}
 	return key ? strdup(key) : NULL;
 }
 
@@ -271,8 +268,8 @@ int toggle_asterisk(sr_val_t *val)
 
 int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val, sr_notif_event_t event)
 {
-	char xpath[XPATH_MAX_LEN];
-	char ucipath[XPATH_MAX_LEN];
+	char xpath[XPATH_MAX_LEN] = {0};
+	char ucipath[XPATH_MAX_LEN] = {0};
 	char *orig_xpath = NULL;
 	char *key = NULL;
 	int rc = SR_ERR_OK;
@@ -340,10 +337,15 @@ int sysrepo_to_uci(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t 
 		}
 	}
 
-	return SR_ERR_OK;
 error:
+	if (NULL != key) {
+		free(key);
+	}
 	return rc;
 uci_error:
+	if (NULL != key) {
+		free(key);
+	}
 	return SR_ERR_INTERNAL;
 }
 
@@ -387,8 +389,9 @@ static int init_sysrepo_data(ctx_t *ctx)
 	return SR_ERR_OK;
 
 cleanup:
-	if (ctx->package) {
-		uci_unload(ctx->uctx, ctx->package);
+	if (ctx->uctx) {
+		uci_free_context(ctx->uctx);
+		ctx->uctx = NULL;
 	}
 	return rc;
 }
@@ -444,6 +447,9 @@ int load_startup_datastore(ctx_t *ctx)
 cleanup:
 	if (NULL != session) {
 		sr_session_stop(session);
+	}
+	if (NULL != connection) {
+		sr_disconnect(connection);
 	}
 
 	return rc;
