@@ -187,5 +187,9 @@ COPY asterisk /usr/libexec/rpcd/asterisk
 
 RUN chmod +x /usr/libexec/rpcd/asterisk
 
+RUN echo '#!/bin/sh' > /etc/init.d/voice_client
+
+RUN chmod +x /etc/init.d/voice_client
+
 COPY supervisord.conf /etc/supervisord.conf
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
