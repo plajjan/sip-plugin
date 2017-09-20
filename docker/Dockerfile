@@ -183,5 +183,9 @@ EXPOSE 830
 
 COPY voice_client /etc/config/voice_client
 
+COPY asterisk /usr/libexec/rpcd/asterisk
+
+RUN chmod +x /usr/libexec/rpcd/asterisk
+
 COPY supervisord.conf /etc/supervisord.conf
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

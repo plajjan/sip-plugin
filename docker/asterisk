@@ -1,0 +1,15 @@
+#!/bin/sh
+
+case "$1" in
+	list)
+		echo '{ "status": { } }'
+	;;
+	call)
+		case "$2" in
+			status)
+				# return json object or an array
+				echo '{ "sip": { "sip0": { "registered": false, "registry_request_sent": false, "port": 5060, "username": "+3852140873X", "domain": "ims.t-com.hr", "domain_port": 1124085810, "refresh_interval": 300, "state": "Unregistered", "registration_time": "-", "last_successful_registration": "-" }, "sip1": { "registered": false, "registry_request_sent": false, "port": 5060, "username": "+3852140873X", "domain": "ims.t-com.hr", "domain_port": 1091177843, "refresh_interval": 300, "state": "Unregistered", "registration_time": "-", "last_successful_registration": "-" } } }'
+			;;
+		esac
+	;;
+esac
