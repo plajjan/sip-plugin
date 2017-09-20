@@ -459,7 +459,7 @@ void ubus_cb(struct ubus_request *req, int type, struct blob_attr *msg)
 {
 	char xpath[XPATH_MAX_LEN] = {0};
 	ubus_ctx_t *ubus_ctx = req->priv;
-	struct json_object *r, *o, *v;
+	struct json_object *r = NULL, *o = NULL, *v = NULL;
 	char *json_result = NULL;
 	int counter = 0;
 	int rc = SR_ERR_OK;
@@ -515,6 +515,9 @@ void ubus_cb(struct ubus_request *req, int type, struct blob_attr *msg)
 	*ubus_ctx->values = sr_val;
 
 cleanup:
+	if (NULL != r) {
+		json_object_put(r);
+	}
 	if (NULL != json_result) {
 		free(json_result);
 	}
@@ -555,5 +558,9 @@ int fill_state_data(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_c
 	}
 
 cleanup:
+	if (NULL != u_ctx) {
+		ubus_free(u_ctx);
+		blob_buf_free(&buf);
+	}
 	return rc;
 }
